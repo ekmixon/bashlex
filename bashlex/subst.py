@@ -50,11 +50,9 @@ def _parsedolparen(parserobj, base, sindex):
 def _extractcommandsubst(parserobj, string, sindex, sxcommand=False):
     if string[sindex] == '(':
         raise NotImplementedError('arithmetic expansion')
-        #return _extractdelimitedstring(parserobj, string, sindex, '$(', '(', '(', sxcommand=True)
-    else:
-        node, si = _parsedolparen(parserobj, string, sindex)
-        si += 1
-        return ast.node(kind='commandsubstitution', command=node, pos=(sindex-2, si)), si
+    node, si = _parsedolparen(parserobj, string, sindex)
+    si += 1
+    return ast.node(kind='commandsubstitution', command=node, pos=(sindex-2, si)), si
 
 def _extractprocesssubst(parserobj, string, sindex):
     #return _extractdelimitedstring(tok, string, sindex, starter, '(', ')', sxcommand=True)
@@ -171,10 +169,9 @@ def _paramexpand(parserobj, string, sindex):
         for zindex in range(tindex, len(string) + 1):
             if zindex == len(string):
                 break
-            if not string[zindex].isalnum() and not string[zindex] == '_':
+            if not string[zindex].isalnum() and string[zindex] != '_':
                 break
-        temp1 = string[sindex:zindex]
-        if temp1:
+        if temp1 := string[sindex:zindex]:
             return (ast.node(kind='parameter', value=temp1[1:], pos=(sindex, zindex)),
                     zindex)
 
@@ -202,18 +199,20 @@ def _expandwordinternal(parserobj, wordtoken, qheredocument, qdoublequotes, quot
         sindex[0] += 1
         if sindex[0] < len(string):
             return string[sindex[0]]
+
     def peekchar():
         if sindex[0]+1 < len(string):
             return string[sindex[0]+1]
 
-    while True:
-        if sindex[0] == len(string):
-            break
-            # goto finished_with_string
+    while True and sindex[0] != len(string):
         c = string[sindex[0]]
         if c in '<>':
-            if (nextchar() != '(' or qheredocument or qdoublequotes or
-                (wordtoken.flags & set([flags.word.DQUOTE, flags.word.NOPROCSUB]))):
+            if (
+                nextchar() != '('
+                or qheredocument
+                or qdoublequotes
+                or wordtoken.flags & {flags.word.DQUOTE, flags.word.NOPROCSUB}
+            ):
                 sindex[0] -= 1
 
                 # goto add_character
@@ -228,23 +227,27 @@ def _expandwordinternal(parserobj, wordtoken, qheredocument, qdoublequotes, quot
                                       pos=(tindex - 2, sindex[0])))
                 istring += string[tindex - 2:sindex[0]]
                 # goto dollar_add_string
-        # TODO
-        # elif c == '=':
-        #     pass
-        # elif c == ':':
-        #     pass
         elif c == '~':
-            if (wordtoken.flags & set([flags.word.NOTILDE, flags.word.DQUOTE]) or
-                (sindex[0] > 0 and not (wordtoken.flags & flags.word.NOTILDE)) or
-                qdoublequotes or qheredocument):
+            if (
+                wordtoken.flags & {flags.word.NOTILDE, flags.word.DQUOTE}
+                or (
+                    sindex[0] > 0
+                    and not (wordtoken.flags & flags.word.NOTILDE)
+                )
+                or qdoublequotes
+                or qheredocument
+            ):
                 wordtoken.flags.clear()
                 wordtoken.flags.add(flags.word.ITILDE)
                 sindex[0] += 1
                 istring += c
             else:
-                stopatcolon = wordtoken.flags & set([flags.word.ASSIGNRHS,
-                                                    flags.word.ASSIGNMENT,
-                                                    flags.word.TILDEEXP])
+                stopatcolon = wordtoken.flags & {
+                    flags.word.ASSIGNRHS,
+                    flags.word.ASSIGNMENT,
+                    flags.word.TILDEEXP,
+                }
+
                 expand = True
                 for i in range(sindex[0], len(string)):
                     r = string[i]
@@ -283,44 +286,39 @@ def _expandwordinternal(parserobj, wordtoken, qheredocument, qdoublequotes, quot
                 if x == -1:
                     raise errors.ParsingError('bad substitution: no closing "`" '
                                               'in %s' % string)
-                else:
-                    if wordtoken.flags & flags.word.NOCOMSUB:
-                        pass
-                    else:
-                        sindex[0] = x
+                if not wordtoken.flags & flags.word.NOCOMSUB:
+                    sindex[0] = x
 
-                        word = string[tindex+1:sindex[0]]
-                        command, ttindex = _recursiveparse(parserobj, word, 0)
-                        _adjustpositions(command, tindex+1, len(string))
-                        ttindex += 1 # ttindex is on the closing char
+                    word = string[tindex+1:sindex[0]]
+                    command, ttindex = _recursiveparse(parserobj, word, 0)
+                    _adjustpositions(command, tindex+1, len(string))
+                    ttindex += 1 # ttindex is on the closing char
 
-                        # assert sindex[0] == ttindex
-                        # go one past the closing `
-                        sindex[0] += 1
+                    # assert sindex[0] == ttindex
+                    # go one past the closing `
+                    sindex[0] += 1
 
-                        node = ast.node(kind='commandsubstitution',
-                                        command=command,
-                                        pos=(tindex, sindex[0]))
-                        parts.append(node)
-                        istring += string[tindex:sindex[0]]
+                    node = ast.node(kind='commandsubstitution',
+                                    command=command,
+                                    pos=(tindex, sindex[0]))
+                    parts.append(node)
+                    istring += string[tindex:sindex[0]]
 
         elif c == '\\':
             istring += string[sindex[0]+1:sindex[0]+2]
             sindex[0] += 2
         elif c == '"':
             sindex[0] += 1
-            continue
-
-            # 8513
-            #if qdoublequotes or qheredocument:
-            #    sindex[0] += 1
-            #else:
-            #    tindex = sindex[0] + 1
-            #    parts, sindex[0] = _stringextractdoublequoted(string, sindex[0])
-            #    if tindex == 1 and sindex[0] == len(string):
-            #        quotedstate = 'wholly'
-            #    else:
-            #        quotedstate = 'partially'
+                    # 8513
+                    #if qdoublequotes or qheredocument:
+                    #    sindex[0] += 1
+                    #else:
+                    #    tindex = sindex[0] + 1
+                    #    parts, sindex[0] = _stringextractdoublequoted(string, sindex[0])
+                    #    if tindex == 1 and sindex[0] == len(string):
+                    #        quotedstate = 'wholly'
+                    #    else:
+                    #        quotedstate = 'partially'
 
         elif c == "'":
             # entire string surronded by single quotes, no expansion is
@@ -361,21 +359,21 @@ def _stringextract(string, sindex, charlist, sxvarname=False):
     i = sindex
     while i < len(string):
         c = string[i]
-        if c == '\\':
-            if i + 1 < len(string):
-                i += 1
-            else:
-                break
+        if (
+            c == '\\'
+            and i + 1 < len(string)
+            or c != '\\'
+            and (not sxvarname or c != '[')
+            and c not in charlist
+        ):
+            i += 1
+        elif c == '\\':
+            break
         elif sxvarname and c == '[':
             ni = _skipsubscript(string, i, 0)
             if string[ni] == ']':
                 i = ni
-        elif c in charlist:
+        else:
             found = True
             break
-        else:
-            i += 1
-    if found:
-        return i
-    else:
-        return -1
+    return i if found else -1

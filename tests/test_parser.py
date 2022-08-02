@@ -732,16 +732,27 @@ class test_parser(unittest.TestCase):
 
     def test_heredoc_spec(self):
         for redirect_kind in ('<<', '<<<'):
-            s = 'a %sEOF | b' % redirect_kind
-            self.assertASTEquals(s,
-                  pipelinenode(s,
-                    commandnode('a %sEOF' % redirect_kind,
-                      wordnode('a', 'a'),
-                      redirectnode('%sEOF' % redirect_kind, None,
-                                   redirect_kind, wordnode('EOF'))),
+            s = f'a {redirect_kind}EOF | b'
+            self.assertASTEquals(
+                s,
+                pipelinenode(
+                    s,
+                    commandnode(
+                        f'a {redirect_kind}EOF',
+                        wordnode('a', 'a'),
+                        redirectnode(
+                            f'{redirect_kind}EOF',
+                            None,
+                            redirect_kind,
+                            wordnode('EOF'),
+                        ),
+                    ),
                     pipenode('|', '|'),
-                    commandnode('b', wordnode('b', 'b'))),
-                  strictmode=False)
+                    commandnode('b', wordnode('b', 'b')),
+                ),
+                strictmode=False,
+            )
+
 
         s = 'a <<-b'
         self.assertASTEquals(s,
@@ -1086,20 +1097,3 @@ class test_parser(unittest.TestCase):
 
     def test_parameter_braces(self):
         return
-
-        # FIXME
-        s = 'a ${b\\}c}'
-
-        self.assertASTEquals(s,
-            commandnode(s,
-              wordnode('a'),
-              wordnode('$(b)c $1', '"$(b)"c" $1"', [
-                comsubnode('$(b)',
-                  commandnode('b',
-                    wordnode('b'),
-                  )
-                ),
-                parameternode('1', '$1'),
-              ])
-            ),
-        )

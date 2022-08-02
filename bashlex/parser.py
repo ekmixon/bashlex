@@ -136,7 +136,6 @@ def _expandword(parser, tokenword):
         # (the reason we even expand when limit == 0 is to get quote removal)
         node = ast.node(kind='word', word=tokenword,
                         pos=(tokenword.lexpos, tokenword.endlexpos), parts=[])
-        return node
     else:
         quoted = bool(tokenword.flags & flags.word.QUOTED)
         doublequoted = quoted and tokenword.value[0] == '"'
@@ -153,7 +152,8 @@ def _expandword(parser, tokenword):
 
         node = ast.node(kind='word', word=expandedword,
                         pos=(tokenword.lexpos, tokenword.endlexpos), parts=parts)
-        return node
+
+    return node
 
 def p_simple_command_element(p):
     '''simple_command_element : WORD
@@ -245,9 +245,6 @@ def _makeparts(p):
             else:
                 parts.append(ast.node(kind='reservedword', word=p[i],
                                       pos=p.lexspan(i)))
-        else:
-            pass
-
     return parts
 
 def p_for_command(p):
@@ -689,9 +686,7 @@ class _parser(object):
         # some mutable state. we make a shallow copy of it so no
         # state spills over to the next call to parse on it
         theparser = copy.copy(yaccparser)
-        tree = theparser.parse(lexer=self.tok, context=self)
-
-        return tree
+        return theparser.parse(lexer=self.tok, context=self)
 
 class _endfinder(ast.nodevisitor):
     '''helper class to find the "real" end pos of a node that contains

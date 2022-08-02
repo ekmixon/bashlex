@@ -13,23 +13,19 @@ class node(object):
         return _dump(self, indent)
 
     def __repr__(self):
-        chunks = []
         d = dict(self.__dict__)
         kind = d.pop('kind')
-        for k, v in sorted(d.items()):
-            chunks.append('%s=%r' % (k, v))
-        return '%sNode(%s)' % (kind.title(), ' '.join(chunks))
+        chunks = ['%s=%r' % (k, v) for k, v in sorted(d.items())]
+        return f"{kind.title()}Node({' '.join(chunks)})"
 
     def __eq__(self, other):
-        if not isinstance(other, node):
-            return False
-        return self.__dict__ == other.__dict__
+        return self.__dict__ == other.__dict__ if isinstance(other, node) else False
 
 class nodevisitor(object):
     def _visitnode(self, n, *args, **kwargs):
         k = n.kind
         self.visitnode(n)
-        return getattr(self, 'visit%s' % k)(n, *args, **kwargs)
+        return getattr(self, f'visit{k}')(n, *args, **kwargs)
 
     def visit(self, n):
         k = n.kind
@@ -163,11 +159,15 @@ def _dump(tree, indent='  '):
             v = d.pop('parts', None)
             if v:
                 fields.append(('parts', _format(v, level)))
-            return ''.join([
-                '%sNode' % kind.title(),
-                '(',
-                ', '.join(('%s=%s' % field for field in fields)),
-                ')'])
+            return ''.join(
+                [
+                    f'{kind.title()}Node',
+                    '(',
+                    ', '.join(('%s=%s' % field for field in fields)),
+                    ')',
+                ]
+            )
+
         elif isinstance(n, list):
             lines = ['[']
             lines.extend((indent * (level + 1) + _format(x, level + 1) + ','
@@ -184,10 +184,7 @@ def _dump(tree, indent='  '):
     return _format(tree)
 
 def findfirstkind(parts, kind):
-    for i, node in enumerate(parts):
-        if node.kind == kind:
-            return i
-    return -1
+    return next((i for i, node in enumerate(parts) if node.kind == kind), -1)
 
 class posconverter(nodevisitor):
     def __init__(self, string):

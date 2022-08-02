@@ -7,7 +7,7 @@ from bashlex.tokenizer import tokentype as tt
 
 tokenize = lambda s: list(tokenizer.tokenizer(s, state.parserstate()))
 
-hasdollarset = set([flags.word.HASDOLLAR])
+hasdollarset = {flags.word.HASDOLLAR}
 
 class test_tokenizer(unittest.TestCase):
 
@@ -76,12 +76,10 @@ class test_tokenizer(unittest.TestCase):
 
     def test_shellquote(self):
         s = '"foo"'
-        self.assertTokens(s, [
-                          t(tt.WORD, '"foo"', [0, 5], set([flags.word.QUOTED]))])
+        self.assertTokens(s, [t(tt.WORD, '"foo"', [0, 5], {flags.word.QUOTED})])
 
         s = '"foo"bar\'baz\''
-        self.assertTokens(s, [
-                          t(tt.WORD, s, [0, len(s)], set([flags.word.QUOTED]))])
+        self.assertTokens(s, [t(tt.WORD, s, [0, len(s)], {flags.word.QUOTED})])
 
         self.assertRaises(tokenizer.MatchedPairError,
                           tokenize,
@@ -96,14 +94,17 @@ class test_tokenizer(unittest.TestCase):
                           t(tt.WORD, '${a}', [18, 22], hasdollarset)])
 
         s = '$"foo" $1'
-        self.assertTokens(s, [
-                          t(tt.WORD, '$"foo"', [0, 6], set([flags.word.QUOTED])),
-                          t(tt.WORD, '$1', [7, 9], hasdollarset)])
+        self.assertTokens(
+            s,
+            [
+                t(tt.WORD, '$"foo"', [0, 6], {flags.word.QUOTED}),
+                t(tt.WORD, '$1', [7, 9], hasdollarset),
+            ],
+        )
 
     def test_readtokenword(self):
         s = 'a\\"'
-        self.assertTokens(s, [
-                          t(tt.WORD, 'a\\"', [0, len(s)], set([flags.word.QUOTED]))])
+        self.assertTokens(s, [t(tt.WORD, 'a\\"', [0, len(s)], {flags.word.QUOTED})])
 
     def test_parameter_expansion(self):
         # s = 'a $"foo"'
@@ -143,9 +144,18 @@ class test_tokenizer(unittest.TestCase):
                           t(tt.WORD, '$(a $[b])', [0, 9], hasdollarset)])
 
         s = '"$(a)"'
-        self.assertTokens(s, [
-                          t(tt.WORD, '"$(a)"', [0, 6], set([flags.word.HASDOLLAR,
-                                                            flags.word.QUOTED]))])
+        self.assertTokens(
+            s,
+            [
+                t(
+                    tt.WORD,
+                    '"$(a)"',
+                    [0, 6],
+                    {flags.word.HASDOLLAR, flags.word.QUOTED},
+                )
+            ],
+        )
+
 
         s = 'a $(! b)'
         self.assertTokens(s, [
@@ -223,13 +233,21 @@ class test_tokenizer(unittest.TestCase):
 
     def test_parsematchedpair(self):
         s = '"`foo`"'
-        self.assertTokens(s, [
-                          t(tt.WORD, '"`foo`"', [0, len(s)], set([flags.word.QUOTED]))])
+        self.assertTokens(s, [t(tt.WORD, '"`foo`"', [0, len(s)], {flags.word.QUOTED})])
 
         s = '"${a}"'
-        self.assertTokens(s, [
-                          t(tt.WORD, '"${a}"', [0, len(s)], set([flags.word.HASDOLLAR,
-                                                                flags.word.QUOTED]))])
+        self.assertTokens(
+            s,
+            [
+                t(
+                    tt.WORD,
+                    '"${a}"',
+                    [0, len(s)],
+                    {flags.word.HASDOLLAR, flags.word.QUOTED},
+                )
+            ],
+        )
+
 
         s = '${\'a\'}'
         self.assertTokens(s, [
@@ -240,8 +258,7 @@ class test_tokenizer(unittest.TestCase):
                           t(tt.WORD, '${$\'a\'}', [0, len(s)], hasdollarset)])
 
         s = "'a\\'"
-        self.assertTokens(s, [
-                          t(tt.WORD, "'a\\'", [0, len(s)], set([flags.word.QUOTED]))])
+        self.assertTokens(s, [t(tt.WORD, "'a\\'", [0, len(s)], {flags.word.QUOTED})])
 
         #s = '"\\\n"'
         #self.assertEqual(tokenize(s), [
@@ -249,14 +266,31 @@ class test_tokenizer(unittest.TestCase):
 
     def test_assignment(self):
         s = 'a=b'
-        self.assertTokens(s, [
-                          t(tt.ASSIGNMENT_WORD, 'a=b', [0, 3],
-                            flags=set([flags.word.NOSPLIT, flags.word.ASSIGNMENT]))])
+        self.assertTokens(
+            s,
+            [
+                t(
+                    tt.ASSIGNMENT_WORD,
+                    'a=b',
+                    [0, 3],
+                    flags={flags.word.NOSPLIT, flags.word.ASSIGNMENT},
+                )
+            ],
+        )
+
 
         s = 'a+=b'
-        self.assertTokens(s, [
-                          t(tt.ASSIGNMENT_WORD, 'a+=b', [0, 4],
-                            flags=set([flags.word.NOSPLIT, flags.word.ASSIGNMENT]))])
+        self.assertTokens(
+            s,
+            [
+                t(
+                    tt.ASSIGNMENT_WORD,
+                    'a+=b',
+                    [0, 4],
+                    flags={flags.word.NOSPLIT, flags.word.ASSIGNMENT},
+                )
+            ],
+        )
 
     def test_plus_at_end_of_word(self):
         s = 'a+ b'
@@ -279,10 +313,14 @@ class test_tokenizer(unittest.TestCase):
                           t(tt.WORD, 'foo', [5, 8])])
 
         s = 'a <<<"b\nc"'
-        self.assertTokens(s, [
-                          t(tt.WORD, 'a', [0, 1]),
-                          t(tt.LESS_LESS_LESS, '<<<', [2, 5]),
-                          t(tt.WORD, '"b\nc"', [5, 10], set([flags.word.QUOTED]))])
+        self.assertTokens(
+            s,
+            [
+                t(tt.WORD, 'a', [0, 1]),
+                t(tt.LESS_LESS_LESS, '<<<', [2, 5]),
+                t(tt.WORD, '"b\nc"', [5, 10], {flags.word.QUOTED}),
+            ],
+        )
 
     def test_foo(self):
         s = 'c)'
@@ -309,10 +347,6 @@ class test_tokenizer(unittest.TestCase):
     def test_escape_error(self):
         return # TODO
 
-        s = "a b\\"
-
-        self.assertRaisesRegex(errors.ParsingError, "No escaped character.*position 2", tokenize, s)
-
     def test_tokenize(self):
         s = 'bar -x'
         self.assertTokens(s, [
@@ -326,13 +360,22 @@ class test_tokenizer(unittest.TestCase):
                           t(tt.WORD, '=z', [8, 10])])
 
         s = "a 'b' c"
-        self.assertTokens(s, [
-                          t(tt.WORD, 'a', [0, 1]),
-                          t(tt.WORD, "'b'", [2, 5], set([flags.word.QUOTED])),
-                          t(tt.WORD, 'c', [6, 7])])
+        self.assertTokens(
+            s,
+            [
+                t(tt.WORD, 'a', [0, 1]),
+                t(tt.WORD, "'b'", [2, 5], {flags.word.QUOTED}),
+                t(tt.WORD, 'c', [6, 7]),
+            ],
+        )
+
 
         s = "a 'b  ' c"
-        self.assertTokens(s, [
-                          t(tt.WORD, 'a', [0, 1]),
-                          t(tt.WORD, "'b  '", [2, 7], set([flags.word.QUOTED])),
-                          t(tt.WORD, 'c', [8, 9])])
+        self.assertTokens(
+            s,
+            [
+                t(tt.WORD, 'a', [0, 1]),
+                t(tt.WORD, "'b  '", [2, 7], {flags.word.QUOTED}),
+                t(tt.WORD, 'c', [8, 9]),
+            ],
+        )

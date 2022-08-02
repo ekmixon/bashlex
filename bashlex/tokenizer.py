@@ -90,13 +90,30 @@ class tokentype(enum.Enum):
     GREATER = '>'
     AMPERSAND = '&'
 
-_reserved = set([
-    tokentype.AND_AND, tokentype.BANG, tokentype.BAR_AND, tokentype.DO,
-    tokentype.DONE, tokentype.ELIF, tokentype.ELSE, tokentype.ESAC,
-    tokentype.FI, tokentype.IF, tokentype.OR_OR, tokentype.SEMI_SEMI,
-    tokentype.SEMI_AND, tokentype.SEMI_SEMI_AND, tokentype.THEN,
-    tokentype.TIME, tokentype.TIMEOPT, tokentype.TIMEIGN, tokentype.COPROC,
-    tokentype.UNTIL, tokentype.WHILE])
+_reserved = {
+    tokentype.AND_AND,
+    tokentype.BANG,
+    tokentype.BAR_AND,
+    tokentype.DO,
+    tokentype.DONE,
+    tokentype.ELIF,
+    tokentype.ELSE,
+    tokentype.ESAC,
+    tokentype.FI,
+    tokentype.IF,
+    tokentype.OR_OR,
+    tokentype.SEMI_SEMI,
+    tokentype.SEMI_AND,
+    tokentype.SEMI_SEMI_AND,
+    tokentype.THEN,
+    tokentype.TIME,
+    tokentype.TIMEOPT,
+    tokentype.TIMEIGN,
+    tokentype.COPROC,
+    tokentype.UNTIL,
+    tokentype.WHILE,
+}
+
 
 for c in '\n;()|&{}':
     _reserved.add(c)
@@ -161,13 +178,10 @@ class token(object):
     def type(self):
         if self.ttype:
             # make yacc see our EOF token as its own special one $end
-            if self.ttype == tokentype.EOF:
-                return '$end'
-            else:
-                return self.ttype.name
+            return '$end' if self.ttype == tokentype.EOF else self.ttype.name
 
     def __nonzero__(self):
-        return not (self.ttype is None and self.value is None)
+        return self.ttype is not None or self.value is not None
 
     __bool__ = __nonzero__
 
@@ -183,12 +197,10 @@ class token(object):
         if self.lexpos is not None and self.endlexpos is not None:
             s.append('@%d:%d' % (self.lexpos, self.endlexpos))
         if self.value:
-            s.append(' ')
-            s.append(repr(self.value))
-
+            s.extend((' ', repr(self.value)))
         if self.flags:
             prettyflags = ' '.join([e.name for e in self.flags])
-            s.append(' (%s)' % prettyflags)
+            s.append(f' ({prettyflags})')
         s.append('>')
         return ''.join(s)
 
@@ -340,14 +352,13 @@ class tokenizer(object):
                     peek_char = self._getc()
                     if peek_char == '&':
                         return tokentype.SEMI_SEMI_AND
-                    else:
-                        self._ungetc(peek_char)
-                        return tokentype.SEMI_SEMI
+                    self._ungetc(peek_char)
+                    return tokentype.SEMI_SEMI
                 elif character == '&':
                     return tokentype.AND_AND
                 elif character == '|':
                     return tokentype.OR_OR
-                # bashlex/parse.y L3105
+                        # bashlex/parse.y L3105
             elif both == '<&':
                 return tokentype.LESS_AND
             elif both == '>&':
@@ -360,9 +371,8 @@ class tokenizer(object):
                 peek_char = self._getc()
                 if peek_char == '>':
                     return tokentype.AND_GREATER_GREATER
-                else:
-                    self._ungetc(peek_char)
-                    return tokentype.AND_GREATER
+                self._ungetc(peek_char)
+                return tokentype.AND_GREATER
             elif both == '|&':
                 return tokentype.BAR_AND
             elif both == ';&':
@@ -383,7 +393,10 @@ class tokenizer(object):
             if character not in '<>' or peek_char != '(':
                 return tokentype(character)
 
-        if character == '-' and (self._last_read_token.ttype == tokentype.LESS_AND or self._last_read_token.ttype == tokentype.GREATER_AND):
+        if character == '-' and self._last_read_token.ttype in [
+            tokentype.LESS_AND,
+            tokentype.GREATER_AND,
+        ]:
             return tokentype(character)
 
         return self._readtokenword(character)
@@ -473,10 +486,7 @@ class tokenizer(object):
             if not d['dollar_present']:
                 d['dollar_present'] = c == '$'
 
-        while True:
-            if c is None:
-                break
-
+        while True and c is not None:
             if d['pass_next_character']:
                 d['pass_next_character'] = False
                 handleescapedchar()
@@ -544,29 +554,33 @@ class tokenizer(object):
         if specialtokentype:
             return self._createtoken(specialtokentype, tokenword)
 
-        if not d['dollar_present'] and not d['quoted'] and self._reserved_word_acceptable(self._last_read_token):
-            if tokenword in valid_reserved_first_command:
-                ttype = valid_reserved_first_command[tokenword]
-                ps = self._parserstate
-                if ps & parserflags.CASEPAT and ttype != tokentype.ESAC:
-                    pass
-                elif ttype == tokentype.TIME and not self._time_command_acceptable():
-                    pass
-                elif ttype == tokentype.ESAC:
-                    ps.discard(parserflags.CASEPAT)
-                    ps.discard(parserflags.CASESTMT)
-                elif ttype == tokentype.CASE:
-                    ps.add(parserflags.CASESTMT)
-                elif ttype == tokentype.COND_END:
-                    ps.discard(parserflags.CONDCMD)
-                    ps.discard(parserflags.CONDEXPR)
-                elif ttype == tokentype.COND_START:
-                    ps.add(parserflags.CONDCMD)
-                elif ttype == tokentype.LEFT_CURLY:
-                    self._open_brace_count += 1
-                elif ttype == tokentype.RIGHT_CURLY and self._open_brace_count:
-                    self._open_brace_count -= 1
-                return self._createtoken(ttype, tokenword)
+        if (
+            not d['dollar_present']
+            and not d['quoted']
+            and self._reserved_word_acceptable(self._last_read_token)
+            and tokenword in valid_reserved_first_command
+        ):
+            ttype = valid_reserved_first_command[tokenword]
+            ps = self._parserstate
+            if ps & parserflags.CASEPAT and ttype != tokentype.ESAC:
+                pass
+            elif ttype == tokentype.TIME and not self._time_command_acceptable():
+                pass
+            elif ttype == tokentype.ESAC:
+                ps.discard(parserflags.CASEPAT)
+                ps.discard(parserflags.CASESTMT)
+            elif ttype == tokentype.CASE:
+                ps.add(parserflags.CASESTMT)
+            elif ttype == tokentype.COND_END:
+                ps.discard(parserflags.CONDCMD)
+                ps.discard(parserflags.CONDEXPR)
+            elif ttype == tokentype.COND_START:
+                ps.add(parserflags.CONDCMD)
+            elif ttype == tokentype.LEFT_CURLY:
+                self._open_brace_count += 1
+            elif ttype == tokentype.RIGHT_CURLY and self._open_brace_count:
+                self._open_brace_count -= 1
+            return self._createtoken(ttype, tokenword)
 
         tokenword = self._createtoken(tokentype.WORD, tokenword, utils.typedset(wordflags))
         if d['dollar_present']:
@@ -594,7 +608,7 @@ class tokenizer(object):
 
             return tokenword
 
-        if len(tokenword.flags & set([wordflags.ASSIGNMENT, wordflags.NOSPLIT])) == 2:
+        if len(tokenword.flags & {wordflags.ASSIGNMENT, wordflags.NOSPLIT}) == 2:
             tokenword.ttype = tokentype.ASSIGNMENT_WORD
 
         if self._last_read_token.ttype == tokentype.FUNCTION:
